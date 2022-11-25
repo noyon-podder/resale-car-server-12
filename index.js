@@ -47,11 +47,28 @@ async function run(){
     
     //bookings collection 
 
+    app.get('/bookings', async(req, res) => {
+        const query = {}
+        const booking = await bookingsCollection.find(query);
+        res.send(booking)
+    })
+
     app.post('/bookings', async(req, res) => {
         const booking = req.body
         const cursor = await bookingsCollection.insertOne(booking);
         res.send(cursor);
     })
+    
+    // users collection 
+    app.get('/dashboard/admin/:email', async(req, res) => {
+        const email = req.params.email;
+        const filter = {
+            email: email
+        }
+        const user = await usersCollection.findOne(filter);
+        res.send({isAdmin: user?.role == "admin"})
+    })
+
     
 }
 run().catch(console.log)
