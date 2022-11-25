@@ -38,6 +38,15 @@ async function run(){
         const cars = await carsCollection.find(query).toArray();
         res.send(cars)
     })
+
+    app.post('/category', async(req, res) => {
+        const product = req.body;
+        const cursor = await carsCollection.insertOne(product);
+        res.send(cursor);
+    })
+
+
+    //users collection
     app.post('/users', async(req, res) => {
         const user = req.body;
         const cursor = await usersCollection.insertOne(user);
@@ -49,7 +58,7 @@ async function run(){
 
     app.get('/bookings', async(req, res) => {
         const query = {}
-        const booking = await bookingsCollection.find(query);
+        const booking = await bookingsCollection.find(query).toArray();
         res.send(booking)
     })
 
