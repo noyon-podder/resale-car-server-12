@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+
 require('dotenv').config();
 
+const stripe = require("stripe")('sk_test_51M8T8rC3nf5rDn3xdpe2Ofw0PaQW7M04zwyeE5lF0lmfO6Y1ETbuTR29y5Qwxsd8smOQrtZuZqIJvgCjIXuWywSy00Zo7gqYKG');
 
 const port = process.env.PORT || 5000;
 
@@ -30,6 +32,12 @@ async function run(){
         res.send(result)
     })
 
+    app.get('/all-product', async(req, res) => {
+        const query = {}
+        const result = await carsCollection.find(query).toArray();
+        res.send(result);
+    })
+
     app.get('/category/:categoryId', async(req, res) => {
         const category = req.params.categoryId;
         const query = {
@@ -45,6 +53,12 @@ async function run(){
         res.send(cursor);
     })
 
+    app.delete('/all-product/:id', async(req, res) => {
+        const id = req.params.id;
+        const filter = { _id: ObjectId(id)}
+        const result = await carsCollection.deleteOne(filter)
+        res.send(result)
+    })
 
     //users collection
     app.post('/users', async(req, res) => {
@@ -62,12 +76,36 @@ async function run(){
         res.send(booking)
     })
 
+    app.get('/bookings/:id', async(req, res) => {
+        const id = req.params.id;
+        const query = { _id: ObjectId(id)}
+        const result = await bookingsCollection.findOne(query)
+        res.send(result)
+    })
+
     app.post('/bookings', async(req, res) => {
         const booking = req.body
         const cursor = await bookingsCollection.insertOne(booking);
         res.send(cursor);
     })
     
+    app.post("/create-payment-intent", async(req, res) => {
+        const booking = req.body;
+        const productPrice = booking.productPrice;
+        const amount = productPrice * 100;
+
+        console.log('amount is ', amount)
+        const paymentIntent = await stripe.paymentIntents.create({
+            currency: 'usd',
+            amount: amount,
+            "payment_method_types": [
+                "card"
+            ]
+        });
+        res.send({
+            clientSecret: paymentIntent.client_secret,
+        })
+    })
     // users collection 
     app.get('/dashboard/admin/:email', async(req, res) => {
         const email = req.params.email;
@@ -78,6 +116,7 @@ async function run(){
         res.send({isAdmin: user?.role == "admin"})
     })
 
+   
     
 }
 run().catch(console.log)
