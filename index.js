@@ -4,7 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 require('dotenv').config();
 
-const stripe = require("stripe")('sk_test_51M8T8rC3nf5rDn3xdpe2Ofw0PaQW7M04zwyeE5lF0lmfO6Y1ETbuTR29y5Qwxsd8smOQrtZuZqIJvgCjIXuWywSy00Zo7gqYKG');
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const port = process.env.PORT || 5000;
 
@@ -24,6 +24,8 @@ async function run(){
     const carsCollection = client.db('resaleCarDB').collection('cars');
     const usersCollection = client.db('resaleCarDB').collection('users');
     const bookingsCollection = client.db('resaleCarDB').collection('bookings');
+    const paymentsCollection = client.db('resaleCarDB').collection('payments');
+    const advertisesCollection = client.db('resaleCarDB').collection('advertises');
    
     //category collection here
     app.get('/category', async(req, res) => {
@@ -41,7 +43,7 @@ async function run(){
     app.get('/category/:categoryId', async(req, res) => {
         const category = req.params.categoryId;
         const query = {
-            categoryId: category
+            categoryId: category,
         }
         const cars = await carsCollection.find(query).toArray();
         res.send(cars)
@@ -72,7 +74,7 @@ async function run(){
 
     app.get('/bookings', async(req, res) => {
         const query = {}
-        const booking = await bookingsCollection.find(query).toArray();
+        const booking = await bookingsCollection.find(query).sort({time: 1}).toArray();
         res.send(booking)
     })
 
@@ -106,17 +108,83 @@ async function run(){
             clientSecret: paymentIntent.client_secret,
         })
     })
+
+    app.post('/payments', async(req, res) => {
+        const payment = req.body;
+        const result = await paymentsCollection.insertOne(payment);
+        const id = payment.bookingId;
+        const filter = { _id: ObjectId(id)}
+        const updatedDoc = {
+            $set: {
+                paid: true,
+                transactionId : payment.transactionId
+            }
+        }
+        const updatedResult = await bookingsCollection.updateOne(filter, updatedDoc)
+        const productId = payment.carId;
+        const query = { _id: ObjectId(productId)}
+        const updatedProduct = {
+            $set: {
+                paid: 'sold',
+            }
+        }
+        const productResult = await carsCollection.updateOne(query, updatedProduct);
+        
+        res.send(result)
+    })
+
+    app.get('/advertises', async(req, res) => {
+        const query = {}
+        const cursor = await advertisesCollection.find(query).toArray();
+        res.send(cursor)
+    })
+
+    app.post('/advertises', async(req, res) => {
+        const advertise = req.body;
+        const result = await advertisesCollection.insertOne(advertise);
+        res.send(result)
+    })
+
     // users collection 
+
+    //admin route
     app.get('/dashboard/admin/:email', async(req, res) => {
         const email = req.params.email;
         const filter = {
             email: email
         }
         const user = await usersCollection.findOne(filter);
-        res.send({isAdmin: user?.role == "admin"})
+        res.send({isAdmin: user?.role === "admin"})
     })
 
+    app.get('/all-seller', async(req, res) => {
+        const query ={
+            role: 'seller'
+        }
+        const user = await usersCollection.find(query).toArray();
+        res.send(user) 
+    })
+
+    //seller route
    
+    app.get('/dashboard/seller/:email', async(req, res) => {
+        const email = req.params.email;
+        const filter = {
+            email: email
+        }
+       const user = await usersCollection.findOne(filter)
+        res.send({isSeller: user?.role === "seller"})
+    })
+
+   //buyer route
+   app.get('/dashboard/buyer/:email', async(req, res) => {
+    const email = req.params.email;
+    const filter = {
+        email: email
+    }
+    const user = await usersCollection.findOne(filter)
+    res.send({isBuyer: user?.role === "buyer"})
+   })
     
 }
 run().catch(console.log)
