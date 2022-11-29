@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
@@ -26,6 +26,7 @@ async function run(){
     const bookingsCollection = client.db('resaleCarDB').collection('bookings');
     const paymentsCollection = client.db('resaleCarDB').collection('payments');
     const advertisesCollection = client.db('resaleCarDB').collection('advertises');
+    const reportedCollection = client.db('resaleCarDB').collection('reportList');
    
     //category collection here
     app.get('/category', async(req, res) => {
@@ -35,7 +36,8 @@ async function run(){
     })
 
     app.get('/all-product', async(req, res) => {
-        const query = {}
+        const email = req.query.email;
+        const query = {email: email}
         const result = await carsCollection.find(query).toArray();
         res.send(result);
     })
@@ -69,6 +71,18 @@ async function run(){
         res.send(cursor);
     })
 
+
+
+    app.get('/jwt', async (req, res) => {
+        const email = req.query.email;
+        const query = { email: email };
+        const user = await usersCollection.findOne(query);
+        if (user) {
+            const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, { expiresIn: '1h' })
+            return res.send({ accessToken: token });
+        }
+        res.status(403).send({ accessToken: '' })
+    });
     
     //bookings collection 
 
@@ -157,16 +171,6 @@ async function run(){
         res.send({isAdmin: user?.role === "admin"})
     })
 
-    app.get('/all-seller', async(req, res) => {
-        const query ={
-            role: 'seller'
-        }
-        const user = await usersCollection.find(query).toArray();
-        res.send(user) 
-    })
-
-    //seller route
-   
     app.get('/dashboard/seller/:email', async(req, res) => {
         const email = req.params.email;
         const filter = {
@@ -176,15 +180,89 @@ async function run(){
         res.send({isSeller: user?.role === "seller"})
     })
 
+
+    app.get('/dashboard/buyer/:email', async(req, res) => {
+        const email = req.params.email;
+        const filter = {
+            email: email
+        }
+        const user = await usersCollection.findOne(filter)
+        res.send({isBuyer: user?.role === "buyer"})
+       })
+
+
+    app.get('/seller', async(req, res) => {
+        const query = {
+            role: 'seller'
+        }
+        const result = await usersCollection.find(query).toArray()
+        res.send(result)
+
+    })
+
+    app.get('/buyer', async(req, res) => {
+        const query = {
+            role: 'buyer'
+        }
+        const result = await usersCollection.find(query).toArray()
+        res.send(result)
+    })
+
+
+    app.get('/report-item', async(req, res) => {
+        const query= {}
+        const report = await reportedCollection.find(query).toArray()
+        res.send(report)
+    })
+    app.put('/verify/:email', async(req, res) => {
+        const email = req.params.email;
+        const filter = {
+            email: email
+        }
+        const updatedDoc = {
+            $set: {
+                verification: true,
+            }
+        }
+        const result = await carsCollection.updateOne(filter, updatedDoc)
+        const sellerUpdate = await usersCollection.updateOne(filter, updatedDoc)
+        res.send(result)
+    })
+
+
+    app.delete('/seller-delete/:id', async(req, res) => {
+        const id = req.params.id;
+        const query = { _id: ObjectId(id)}
+        const cursor = await usersCollection.deleteOne(query)
+        res.send(cursor)
+    })
+
+    app.delete('/buyer-delete/:id', async(req, res) => {
+        const id = req.params.id;
+        const query = { _id: ObjectId(id)}
+        const cursor = await usersCollection.deleteOne(query)
+        res.send(cursor)
+    })
+
+    app.delete('/report-item/:id', async(req, res) => {
+        const id = req.params.id;
+        const query = {_id: id.id}
+        const filter = { _id: ObjectId(id)}
+        const cursor = await reportedCollection.deleteOne(query)
+        const reportItemDelete = await carsCollection.deleteOne(filter)
+        res.send(cursor)
+    })
+    app.post('/report-item', async(req, res) => {
+        const reportProduct = req.body;
+        const result = await reportedCollection.insertOne(reportProduct)
+        res.send(result)
+    })
+    //seller route
+   
+   
+
    //buyer route
-   app.get('/dashboard/buyer/:email', async(req, res) => {
-    const email = req.params.email;
-    const filter = {
-        email: email
-    }
-    const user = await usersCollection.findOne(filter)
-    res.send({isBuyer: user?.role === "buyer"})
-   })
+  
     
 }
 run().catch(console.log)
